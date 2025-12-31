@@ -85,3 +85,12 @@ export function berechneETFSparplan(
         gewinn:Number(gewinn.toFixed(2))
     }
 }
+
+export function berechneRenditeAusPreisen(preise: number[]): number {
+  if (preise.length < 2) return 0;
+
+  const start = preise[preise.length - 1];
+  const ende = preise[0];
+
+  return Number((((ende - start) / start) * 100).toFixed(2));
+}
