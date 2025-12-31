@@ -1,13 +1,31 @@
-import {useState} from 'react';
-import { berechneETFSparplan, type ETFResult } from './utils/etfCalculator';
+import { useState } from "react";
+import {
+  berechneETFSparplan,
+  berechneJahresDiagramm,
+  type ETFResult,
+  type JahresDiagramm,
+} from "./utils/etfCalculator";
 
-console.log(berechneETFSparplan(100,360,7));
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  ResponsiveContainer,
+} from "recharts";
+
+
+
+
 
 function App() {
   const [sparrate, setSparrate] = useState<number>(100);
   const [monate, setMonate] = useState<number>(30);
   const [rendite, setRendite] = useState<number>(7);
   const [result, setResult] = useState<ETFResult | null>(null);
+  const [diagrammDaten, setDiagrammDaten] = useState<JahresDiagramm[]>([]);
 
   const formatEuro = (value: number) => 
     new Intl.NumberFormat("de-DE", {
@@ -22,6 +40,14 @@ function App() {
       monate, 
       rendite
     );
+
+    const diagramm = berechneJahresDiagramm(
+      sparrate, 
+      monate, 
+      rendite 
+    )
+
+    setDiagrammDaten(diagramm);
     setResult(berechnung);
   }
 
@@ -77,6 +103,43 @@ function App() {
         <p>Gewinn: {formatEuro(result.gewinn)} </p>
       </div>
     )}
+
+    {diagrammDaten.length > 0 && (
+  <div style={{ width: "100%", height: 350 }}>
+    <h3>Vermögensentwicklung</h3>
+
+    <ResponsiveContainer>
+      <BarChart data={diagrammDaten}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="jahr" />
+        <YAxis />
+        <Tooltip
+          formatter={(value) => {
+            if (typeof value !== "number") return "";
+
+            return new Intl.NumberFormat("de-DE", {
+              style: "currency",
+              currency: "EUR",
+            }).format(value);
+          }}
+        />
+
+        <Bar
+          dataKey="einzahlung"
+          stackId="a"
+          fill="#059669"
+        />
+
+        <Bar
+          dataKey="wertsteigerung"
+          stackId="a"
+          fill="#065f46"
+        />
+      </BarChart>
+    </ResponsiveContainer>
+  </div>
+)}
+
   </div>
 );
 
