@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   berechneETFSparplan,
   berechneJahresDiagramm,
@@ -19,16 +19,34 @@ import {
 
 import { fetchETFPerformance } from "./api/etfApi";
 
+function berechneMonate(start: string, ende: string): number {
+  const startDate = new Date(start);
+  const endDate = new Date(ende);
+
+  const jahre = endDate.getFullYear() - startDate.getFullYear();
+  const monate = endDate.getMonth() - startDate.getMonth();
+
+  return Math.max(jahre * 12 + monate + 1, 0);
+}
+
 function App() {
 
   const [sparrate, setSparrate] = useState<number>(100);
-  const [monate, setMonate] = useState<number>(30);
   const [rendite, setRendite] = useState<number>(7);
+
+  const [startDatum, setStartDatum] = useState<string>("2011-01-01");
+  const [endDatum, setEndDatum] = useState<string>("2025-11-30");
 
   const [selectedETF, setSelectedETF] = useState<string>("");
 
   const [result, setResult] = useState<ETFResult | null>(null);
   const [diagrammDaten, setDiagrammDaten] = useState<JahresDiagramm[]>([]);
+
+
+  const monate = useMemo(
+    () => berechneMonate(startDatum, endDatum),
+    [startDatum, endDatum]
+  );
 
   const formatEuro = (value: number) =>
     new Intl.NumberFormat("de-DE", {
@@ -37,52 +55,48 @@ function App() {
     }).format(value);
 
 
-  useEffect(() => {
-    if (!selectedETF) return;
+async function handleBerechnen() {
+  if (monate <= 0) return;
 
-    fetchETFPerformance(selectedETF)
-      .then((preise) => {
-        const renditeETF = berechneRenditeAusPreisen(
-          preise.map((p) => p.close)
-        );
+  try {
+    let renditeFinal = rendite;
 
-        setRendite(renditeETF);
+    if (selectedETF) {
+      const preise = await fetchETFPerformance(
+        selectedETF,
+        startDatum,
+        endDatum
+      );
 
-        const diagramm = berechneJahresDiagramm(
-          sparrate,
-          monate,
-          renditeETF
-        );
+      renditeFinal = berechneRenditeAusPreisen(
+        preise.map((p) => p.close)
+      );
 
-        const berechnung = berechneETFSparplan(
-          sparrate,
-          monate,
-          renditeETF
-        );
+      if (!Number.isFinite(renditeFinal)) {
+        throw new Error("Rendite konnte nicht berechnet werden");
+      }
 
-        setDiagrammDaten(diagramm);
-        setResult(berechnung);
-      })
-      .catch(console.error);
-  }, [selectedETF, sparrate, monate]);
+      setRendite(renditeFinal);
+    }
 
-  function handleBerechnen() {
-    const berechnung = berechneETFSparplan(
-      sparrate,
-      monate,
-      rendite
+    setResult(
+      berechneETFSparplan(sparrate, monate, renditeFinal)
     );
 
-    const diagramm = berechneJahresDiagramm(
-      sparrate,
-      monate,
-      rendite
+    setDiagrammDaten(
+      berechneJahresDiagramm(sparrate, monate, renditeFinal)
     );
-
-    setDiagrammDaten(diagramm);
-    setResult(berechnung);
+  } catch (err) {
+    console.error(err);
+    alert(
+      err instanceof Error
+        ? err.message
+        : "Unbekannter Fehler bei der Berechnung"
+    );
   }
-  
+}
+
+
   return (
     <div style={{ maxWidth: 800, margin: "0 auto" }}>
       <h1>ETF Sparplan Rechner</h1>
@@ -101,18 +115,6 @@ function App() {
 
       <div>
         <label>
-          Laufzeit (Monate):
-          <input
-            type="number"
-            value={monate}
-            onChange={(e) => setMonate(Number(e.target.value))}
-            min={1}
-          />
-        </label>
-      </div>
-
-      <div>
-        <label>
           Rendite (% p.a.):
           <input
             type="number"
@@ -121,27 +123,41 @@ function App() {
             disabled={!!selectedETF}
           />
         </label>
-        {selectedETF && <small> Rendite wird aus ETF-Daten berechnet</small>}
+        {selectedETF && (
+          <small> Rendite wird aus ETF-Daten berechnet</small>
+        )}
       </div>
 
       <div>
         <label>
-          ETF auswählen:
-          <select
-            value={selectedETF}
-            onChange={(e) => setSelectedETF(e.target.value)}
-          >
-            <option value="">– kein ETF –</option>
-            <option value="IVV">S&P 500 (IVV)</option>
-            <option value="URTH">MSCI World (URTH)</option>
-            <option value="QQQ">NASDAQ 100 (QQQ)</option>
-          </select>
+          Startdatum:
+          <input
+            type="date"
+            value={startDatum}
+            onChange={(e) => setStartDatum(e.target.value)}
+          />
         </label>
       </div>
+
+      <div>
+        <label>
+          Enddatum:
+          <input
+            type="date"
+            value={endDatum}
+            onChange={(e) => setEndDatum(e.target.value)}
+          />
+        </label>
+      </div>
+
+      <p>
+        Laufzeit: <strong>{monate}</strong> Monate
+      </p>
 
       <button
         onClick={handleBerechnen}
         disabled={sparrate <= 0 || monate <= 0}
+        style={{ marginTop: 20 }}
       >
         Berechnen
       </button>
@@ -172,7 +188,11 @@ function App() {
                 }
               />
               <Bar dataKey="einzahlung" stackId="a" fill="#059669" />
-              <Bar dataKey="wertsteigerung" stackId="a" fill="#065f46" />
+              <Bar
+                dataKey="wertsteigerung"
+                stackId="a"
+                fill="#065f46"
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>
